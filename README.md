@@ -17,7 +17,7 @@ Un'altra caratteristica interessante di HSO è quella di poter utilizzare funzio
 
 ## Architettura HSO
 
-![Architettura HSO](./img/architettura.jpg)
+![Architettura HSO](./assets/architettura.jpg)
 
 La figura mostra i componenti fondamentali di **HSO**.
 
