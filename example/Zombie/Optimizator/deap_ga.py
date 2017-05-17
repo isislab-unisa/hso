@@ -124,7 +124,7 @@ evalQ.send(str(len(cpu_model)))
 evalQ.send(cpu_model)
 evalQ.send(str(len(gpu_model)))
 evalQ.send(gpu_model)
-
+# -----fine codice aggiunto per ZeroMQ----------
 
 num_iter = 10
 num_pop = 50
