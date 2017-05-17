@@ -15,7 +15,9 @@ HSO supporta l'Heterogeneous computing, cioè sfrutta gli accelleratori disponib
 
 Un'altra caratteristica interessante di HSO è quella di poter utilizzare funzioni di ottimizzazione scritte in diversi linguaggi di programmazione tra cui (Python, Java, etc) grazie all'utilizzo della libreria ZeroMQ. 
 
-##Architettura HSO
+## Architettura HSO
+
+![Architettura HSO](./img/architettura.jpg)
 
 La figura mostra i componenti fondamentali di **HSO**.
 
