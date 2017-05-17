@@ -11,7 +11,7 @@ La tecnica di Simulation Optimizzation ci permette di trovare questi parametri m
 * Scritto in C.
 * Piattforma supportata: Linux
 
-HSO supporta l'Heterogeneous computing, cioè sfrutta gli accelleratori disponibili per poter eseguire le simulazioni in maniera efficiente.
+HSO supporta l'Heterogeneous computing, cioè sfrutta gli acceleratori disponibili per poter eseguire le simulazioni in maniera efficiente.
 
 Un'altra caratteristica interessante di HSO è quella di poter utilizzare funzioni di ottimizzazione scritte in diversi linguaggi di programmazione tra cui (Python, Java, etc) grazie all'utilizzo della libreria ZeroMQ. 
 
@@ -22,7 +22,7 @@ Un'altra caratteristica interessante di HSO è quella di poter utilizzare funzio
 La figura mostra i componenti fondamentali di **HSO**.
 
 
-Il Master HSO non appena viene lanciato fa partire una fase di discovery delle risorse per trovare gli accelleratori disponibili. Una volta riecvute tali informazioni attende dei messaggi da parte della funzione di ottimizzazione.
+Il Master HSO non appena viene lanciato fa partire una fase di discovery delle risorse per trovare gli acceleratori disponibili. Una volta riecvute tali informazioni attende dei messaggi da parte della funzione di ottimizzazione.
 
 
 Come si vede dall'immagine la funzione di ottimizzazione comunica con il master HSO attraverso due code (EVAL e OUT), che sono essenzialmente dei socket zeroMQ su cui vengono inviate delle stringhe. Tali stringhe possono essere:
