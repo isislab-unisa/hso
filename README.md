@@ -16,7 +16,6 @@ HSO supporta l'Heterogeneous computing, cioè sfrutta gli accelleratori disponib
 Un'altra caratteristica interessante di HSO è quella di poter utilizzare funzioni di ottimizzazione scritte in diversi linguaggi di programmazione tra cui (Python, Java, etc) grazie all'utilizzo della libreria ZeroMQ. 
 
 ##Architettura HSO
-![Architettura HSO](./img/architettura.jpg)
 
 La figura mostra i componenti fondamentali di **HSO**.
 
@@ -33,8 +32,3 @@ Come si vede dall'immagine la funzione di ottimizzazione comunica con il master 
 >Le prime due tipologie di stringhe vengono inviate sul socket EVAL dalla funzione di ottimizzazione e utilizzate dal master HSO, mentre l'ultima tipologia di stringhe viene inviata sul socket OUT dal master HSO e utilizzata dalla funzione di ottimizzazione
 
 Il master HSO dopo aver ricevuto dopo aver ricevuto le stringhe di controllo ed aver comunicato tali stringhe a tutti i suoi slave, attende la lista dei parametri su cui eseguire le simulazioni. Una volta ottenuta questa lista fa partire la computazione distribuendola sugli slave. Una volta terminata la computazione, il risultato di quest'ultima viene inviato alla funzione di ottimizzazione, che effettuerà le sue considerazioni sull'output ricevuto e a seconda di quest'ultime o terminerà o invierà al master HSO una nuova lista di parametri. 
-
-
-
-
-
