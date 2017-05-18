@@ -17,7 +17,7 @@ Another interesting feature of HSO is that you can use optimization function wri
 
 ## HSO structure
 
-<center>![HSO structure](./assets/architettura.jpg)</center>
+![HSO structure](./assets/architettura.jpg)
 
 The figure illustrates the main components of **HSO**. We can see that the optimizer is connected to the HSO master through two queues, which are essentially two ZeroMQ socket. Strings are sent on these sockets, these strings can be of three types:
 
@@ -38,7 +38,7 @@ In the initialization phase, the coordinated execution between the HSO Master (a
 5. The HSO master sets the simulation execution environment, sends the information received to the slaves, and waits the list of parameters from the Optimization function.
 6. The Slave sets the CPU model and the GPU model and waits for the parameters of simulations from HSO master.
 
-<center>![Scambio messaggi fase iniziale](./assets/HSO_init.png)</center>
+![Scambio messaggi fase iniziale](./assets/HSO_init.png)
 
 After the initialization phase, the coordinated execution between the HSO Master (and Slaves) and  the Optimization function follows this pattern:
 
@@ -49,7 +49,7 @@ After the initialization phase, the coordinated execution between the HSO Master
 5. The optimization function, received the output, makes its own consideration and decides whether to terminate or send a new parameter list.
 6. After finishing the computation for an Optimization function,the HSO Master waits for a new Optimization function to be launched, and the process just described will start again
 
-<center>![scambio messaggi computazione](./assets/HSO_com.png)</center>
+![scambio messaggi computazione](./assets/HSO_com.png)
 
 ## HSO installation and usage
 
