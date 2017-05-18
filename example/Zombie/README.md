@@ -1,4 +1,4 @@
-#Example: Zombie
+# Example: Zombie
 
 The goal of this tutorial is show the usage of the Heterogeneous Simulation Optimization (**HSO**).
 
@@ -10,7 +10,7 @@ In this example we have:
 
 >Note: The simulations are not totally equivalent but both follow the Zombie model specification described below.
 
-##Model detail
+## Model detail
 The model has two kinds of agent:
 
 * Zombies
