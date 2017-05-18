@@ -1,36 +1,77 @@
 # Heterogeneous Simulation Optimization (HSO)
 
-Le simulazioni vengono utilizzate per modellare ed analizzare dei comportamenti complessi, tali comportamenti si traducono in un modello matematico governato da un insieme parametri.
-A seconda del valore che diamo a questi parametri il modello avrà una certa soluzione, solitamente quello che si vuole è trovare dei parametri che rendano la soluzione _ammissibile_ e quanto più vicina all'_ottimo_.
-
-La tecnica di Simulation Optimizzation ci permette di trovare questi parametri migliori senza esplorare tutto lo spazio dei parametri, ed ha come scopo quello di andare a minimizzare l'utilizzo delle risorse spese andando a massimizzare le informazioni ricavate dalle simulazioni.
-
-**Heterogeneous Simulation Optimizzation (HSO)** è:
-
-* Sviluppato per Simulation Optimizzation.
-* Scritto in C.
-* Piattforma supportata: Linux
-
-HSO supporta l'Heterogeneous computing, cioè sfrutta gli acceleratori disponibili per poter eseguire le simulazioni in maniera efficiente.
-
-Un'altra caratteristica interessante di HSO è quella di poter utilizzare funzioni di ottimizzazione scritte in diversi linguaggi di programmazione tra cui (Python, Java, etc) grazie all'utilizzo della libreria ZeroMQ. 
-
-## Architettura HSO
-
-![Architettura HSO](./assets/architettura.jpg)
-
-La figura mostra i componenti fondamentali di **HSO**.
+The simulation are used to model and analyze complex behaviors. These behaviors are translated into a mathematical model governed by a set of parameters.  
+Usually, we want find some parameters that make the solution of the model admissible and close to the best.
+Simulation optimization is the process of finding the best input variable values from among all possibilities without explicitly evaluating each possibility. This process optimization aims to minimize the resources spent while maximizing the information obtained in a simulation experiment.
 
 
-Il Master HSO non appena viene lanciato fa partire una fase di discovery delle risorse per trovare gli acceleratori disponibili. Una volta riecvute tali informazioni attende dei messaggi da parte della funzione di ottimizzazione.
+**Heterogeneous Simulation Optimization (HSO)** is:
 
+* Developed for Simulation Optimization.
+* Written in C, and use the MPI Library.
+* Supported platform: Linux.
 
-Come si vede dall'immagine la funzione di ottimizzazione comunica con il master HSO attraverso due code (EVAL e OUT), che sono essenzialmente dei socket zeroMQ su cui vengono inviate delle stringhe. Tali stringhe possono essere:
+HSO supports the Heterogeneous Computing, that is exploit the available computational accelerators for run the simulations in the better way.
 
-* stringhe di controllo, usate per settare l'ambiente di esecuzione delle simulazioni 
-* stringhe contenenti la lista dei parameti su cui eseguire le simulazioni
-* stringhe contenti il risultato della computazione
+Another interesting feature of HSO is that you can use optimization function written in different programming language (C, C++, C#, Python, Java, etc.) using the [ZeroMQ](http://www.zeromq.org/) Library.
 
->Le prime due tipologie di stringhe vengono inviate sul socket EVAL dalla funzione di ottimizzazione e utilizzate dal master HSO, mentre l'ultima tipologia di stringhe viene inviata sul socket OUT dal master HSO e utilizzata dalla funzione di ottimizzazione
+## HSO structure
 
-Il master HSO dopo aver ricevuto dopo aver ricevuto le stringhe di controllo ed aver comunicato tali stringhe a tutti i suoi slave, attende la lista dei parametri su cui eseguire le simulazioni. Una volta ottenuta questa lista fa partire la computazione distribuendola sugli slave. Una volta terminata la computazione, il risultato di quest'ultima viene inviato alla funzione di ottimizzazione, che effettuerà le sue considerazioni sull'output ricevuto e a seconda di quest'ultime o terminerà o invierà al master HSO una nuova lista di parametri. 
+<center>![HSO structure](./assets/architettura.jpg)</center>
+
+The figure illustrates the main components of **HSO**. We can see that the optimizer is connected to the HSO master through two queues, which are essentially two ZeroMQ socket. Strings are sent on these sockets, these strings can be of three types:
+
+* Control strings, used to set the simulation execution environment.
+* Strings containing the list of parameters to run the simulations.
+* Strings containing the result of the simulations.
+
+> The first two types of string are sent on the EVAL socket from the optimization function to the HSO Master, while the last type is sent on the OUT socket form the HSO Master to the optimization function
+
+### HSO workflow
+
+In the initialization phase, the coordinated execution between the HSO Master (and Slaves) and  the Optimization function follows this pattern:
+
+1. When the HSO Master starts, it waits for the Slaves to send the number of CPUs and Computational Accelerators available (for the moment we consider only the GPUs).
+2. The Slave sent this information and wait for simulation model informations from the HSO Master.
+3. The HSO Master waits for the Optimization function to send strings.
+4. When the Optimization function starts, send to the Master the address of OUT socket, the CPU model and the GPU model.
+5. The HSO master sets the simulation execution environment, sends the information received to the slaves, and waits the list of parameters from the Optimization function.
+6. The Slave sets the CPU model and the GPU model and waits for the parameters of simulations from HSO master.
+
+<center>![Scambio messaggi fase iniziale](./assets/HSO_init.png)</center>
+
+After the initialization phase, the coordinated execution between the HSO Master (and Slaves) and  the Optimization function follows this pattern:
+
+1. The Optimization function send the list of parameters to the Master HSO.
+2. The HSO Master, received the list, divides it and starts running the simulations by distributing them to themselves and to the slaves. After finishing his computation part waits for the slave result.
+3. The Slave, received the list of parameters, starts running the simulations. After finishing his simulations send the result to the HSO Master. 
+4. The HSO Master collects the slave's output, concatenates his, and sends everything to the Optimization function.
+5. The optimization function, received the output, makes its own consideration and decides whether to terminate or send a new parameter list.
+6. After finishing the computation for an Optimization function,the HSO Master waits for a new Optimization function to be launched, and the process just described will start again
+
+<center>![scambio messaggi computazione](./assets/HSO_com.png)</center>
+
+## HSO installation and usage
+
+Before installing make sure you have the following requirements:
+
+* autoreconf 2.69 or higher 
+* MPI
+* ZeroMQ, for installation guide see [ZeroMQ - Get the software](http://zeromq.org/intro:get-the-software)
+
+For installing HSO:
+
+1. Download the HSO github repository 
+>git clone https://github.com/isislab-unisa/hso.git
+
+2. Install HSO:
+> cd "path to HSO folder"  
+> chmod +x autogen.sh  
+> ./autogen.sh  
+> ./configure   
+> make  
+> cd src/  
+> chmod +x hso
+
+For usage of HSO see the [Example: Zombie](./example/Zombie/README.md)
+
