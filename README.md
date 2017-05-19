@@ -70,8 +70,10 @@ For installing HSO:
 > ./autogen.sh  
 > ./configure   
 > make  
-> cd src/  
-> chmod +x hso
+> make install  
+3. To run HSO:
+> mpirun -np numTask - host listHost hso  
 
-For usage of HSO see the [Example: Zombie](./example/Zombie/README.md)
+
+For more details about the usage of HSO see the [Example: Zombie](./example/Zombie/README.md)
 
