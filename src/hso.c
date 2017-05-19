@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "mpi.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,12 +7,11 @@
 #include <signal.h>
 #include <assert.h>
 #include <pthread.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/ioctl.h>
-#include <netinet/in.h>
-#include <net/if.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <ifaddrs.h>
+#include <linux/if_link.h>
 #include <zmq.h>
 
 #include "libs/zhelpers.h"
@@ -139,18 +139,37 @@ int numCpus(){
 }
 
 char* getAddress(){
-	int n;
-    	struct ifreq ifr;
-    	char array[] = "eth0";
- 
-	n = socket(AF_INET, SOCK_DGRAM, 0);
-    	//Type of address to retrieve - IPv4 IP address
-    	ifr.ifr_addr.sa_family = AF_INET;
-    	//Copy the interface name in the ifreq structure
-    	strncpy(ifr.ifr_name , array , IFNAMSIZ - 1);
-    	ioctl(n, SIOCGIFADDR, &ifr);
-    	close(n);
-	return inet_ntoa(( (struct sockaddr_in *)&ifr.ifr_addr )->sin_addr);
+	struct ifaddrs *ifaddr, *ifa;
+	int family, s, n;
+	char result[NI_MAXHOST],host[NI_MAXHOST];
+
+	if (getifaddrs(&ifaddr) == -1) {
+		perror("getifaddrs");
+		exit(EXIT_FAILURE);
+	}
+
+	for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
+		if (ifa->ifa_addr == NULL)
+			continue;
+		family = ifa->ifa_addr->sa_family;
+		if(family == AF_INET){
+			s = getnameinfo(ifa->ifa_addr,
+					(family == AF_INET) ? sizeof(struct sockaddr_in) :
+							sizeof(struct sockaddr_in6),
+							host, NI_MAXHOST,
+							NULL, 0, NI_NUMERICHOST);
+			if (s != 0) {
+				printf("getnameinfo() failed: %s\n", gai_strerror(s));
+				exit(EXIT_FAILURE);
+			}
+			if(strcmp(ifa->ifa_name,"lo")!=0){
+				strcpy(result,host);
+				break;
+			}
+		}
+	}
+	freeifaddrs(ifaddr);
+	return result;
 }
 
 void *context,*evalQ,*outQ;
@@ -350,7 +369,7 @@ int main(int argc, char *argv[]){
 
 				/*INIZIO COMPUTAZIONE LOCALE*/
 				if (VERBOSE) {
-						printf("MASTER: inizio computazione locale\n");
+					printf("MASTER: inizio computazione locale\n");
 				}
 				char ** iteration_param = split(params_split[0],"-",&split_size);
 				for(int i = 0;i<split_size;i++){
@@ -545,3 +564,4 @@ int main(int argc, char *argv[]){
 	MPI_Finalize();
 	exit(0);
 }
+

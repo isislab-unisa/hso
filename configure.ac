@@ -10,7 +10,7 @@ AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 # Checks for programs.
 AC_PROG_CC([mpicc])
-
+AC_PROG_INSTALL
 # Checks for libraries.
 have_pthread=no
 AC_SEARCH_LIBS([pthread_create, pthread_join],[pthread],[have_pthread=yes])
@@ -61,7 +61,7 @@ fi
 
 
 # Checks for header files.
-AC_CHECK_HEADERS([stdint.h stdlib.h string.h sys/time.h unistd.h])
+AC_CHECK_HEADERS([arpa/inet.h netdb.h stdint.h stdlib.h string.h sys/socket.h sys/time.h unistd.h])
 
 if test "x${have_pthread}" = xyes; then
 	AC_CHECK_HEADERS([pthread.h],[],[have_pthread=no])

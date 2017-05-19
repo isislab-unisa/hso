@@ -72,7 +72,7 @@ To install HSO:
 > make  
 > make install  
 3. To run HSO:
-> mpirun -np numTask - host listHost hso  
+> mpirun -np numTask -host listHost hso  
 
 
 For more details about the usage of HSO see the [Example: Zombie](./example/Zombie/README.md)
