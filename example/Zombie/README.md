@@ -1,6 +1,6 @@
 # Example: Zombie
 
-The goal of this tutorial is show the usage of the Heterogeneous Simulation Optimization (**HSO**).
+The goal of this tutorial is to show the usage of the Heterogeneous Simulation Optimization (**HSO**).
 
 In this example we have:
 
@@ -25,7 +25,28 @@ These agents are located in a two dimensional continuous space where each agent 
 The model is characterized by:
 
 * human_count, the number of people involved in the simulation process;
-* zombie_count, the intial number (at time 0 of the simulation) of infected people;
+* zombie_count, the number (at the beginning of the simulation) of infected people;
 * human_step_size, the human velocity;
 * zombie_step_size, the zombie velocity.
+
+
+In the Simulation Optimization process we want to find the value of these parameters that maximize the number of alive Humans after the simulation is completed.
+
+## Run the example
+
+Before run the example, you must make these preliminary steps:
+
+1. Check the Optimizer's prerequisites and set some of its variables correctly for it to run, see [Optimizer](./Optimizer/README.md)
+2. Build the Netlogo simulation, see [Netlogo](./Simulation_Netlogo/README.md)
+3. Build the FlameGPU simulation, see [FlameGPU](./Simulation_Flame/README.md)
+
+
+After completing these preliminary steps:
+
+1. Run HSO
+>mpirun -np numTask -host listHost hso
+2. Run the Optimizer (the Optimizer must not necessarily be launched on the same machine where HSO is running), more details in [Optimizer](./Optimizer/README.md) :
+>cd "path of Optimizer"  
+>python deap_ga.py
+
 
