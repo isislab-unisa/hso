@@ -59,7 +59,7 @@ Before installing make sure you have the following requirements:
 * MPI
 * ZeroMQ, for installation guide see [ZeroMQ - Get the software](http://zeromq.org/intro:get-the-software)
 
-For installing HSO:
+To install HSO:
 
 1. Download the HSO github repository 
 >git clone https://github.com/isislab-unisa/hso.git
