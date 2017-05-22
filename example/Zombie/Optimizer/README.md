@@ -69,9 +69,10 @@ Before running the Optimizer make sure you have the following requirements:
 
 Before executing the optimizer, the addresses of the zeroMQ sockets must be correctly set up with their addresses.
 
-To run the Optimizer:
-> python deap_ga.py
-
+To run the Optimizer
+```
+    python deap_ga.py
+```
 #### Example output
 
 

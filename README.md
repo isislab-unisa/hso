@@ -1,6 +1,6 @@
 # Heterogeneous Simulation Optimization (HSO)
 
-The simulation are used to model and analyze complex behaviors. These behaviors are translated into a mathematical model governed by a set of parameters.  
+The simulations are used to model and analyze complex behaviors. These behaviors are translated into a mathematical model governed by a set of parameters.  
 Usually, we want find some parameters that make the solution of the model admissible and close to the best.
 Simulation optimization is the process of finding the best input variable values from among all possibilities without explicitly evaluating each possibility. This process aims to minimize the resources spent while maximizing the information obtained in a simulation experiment.
 
@@ -62,18 +62,23 @@ Before installing make sure you have the following requirements:
 To install HSO:
 
 1. Download the HSO github repository 
->git clone https://github.com/isislab-unisa/hso.git
+```
+    git clone https://github.com/isislab-unisa/hso.git
+```
 
 2. Install HSO:
-> cd "path to HSO folder"  
-> chmod +x autogen.sh  
-> ./autogen.sh  
-> ./configure   
-> make  
-> make install  
+```
+    cd "path to HSO folder"  
+    chmod +x autogen.sh  
+    ./autogen.sh  
+    ./configure   
+    make  
+    make install  
+```
 3. To run HSO:
-> mpirun -np numTask -host listHost hso  
-
+```
+    mpirun -np numTask -host listHost hso  
+```
 
 For more details about the usage of HSO see the [Example: Zombie](./example/Zombie/README.md)
 

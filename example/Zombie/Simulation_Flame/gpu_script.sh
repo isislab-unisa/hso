@@ -9,7 +9,7 @@ fi
 INPUT=$1
 ITER=50
 GPUID=$2
-DATA_DIR="$HOME/provainput/$GPUID"
+DATA_DIR="" # folder that contains the XML file of data agent information (intial agent data)
 
 if [ -d "$DATA_DIR" ]; then
    rm -r "$DATA_DIR"
@@ -20,11 +20,11 @@ mkdir "$DATA_DIR"
 if [ -f "$DATA_DIR/0.xml" ]; then
 		rm "$DATA_DIR/0.xml"
 fi
-cd ../example/Zombie/Simulation_Flame
-./XMLWriter "$DATA_DIR/0.xml"  "$INPUT"
-cd FLAMEGPU-master/bin/x64/Release_Console
+cd "" # go to the folder that contains XMLWriter
+./XMLWriter "$DATA_DIR/0.xml"  "$INPUT" 
+cd "" #go to the path of FlameGPU bin
 touch "file$GPUID"
 ./ZombiePartitioning_console "$DATA_DIR/0.xml" $ITER $GPUID >> "file$GPUID"
 rm "file$GPUID"
-cd ../../../../
+cd "" #go to the folder that contains XMLReader
 ./XMLReader "$DATA_DIR/$ITER.xml"

@@ -44,9 +44,12 @@ Before run the example, you must make these preliminary steps:
 After completing these preliminary steps:
 
 1. Run HSO
->mpirun -np numTask -host listHost hso
+```
+    mpirun -np numTask -host listHost hso
+```
 2. Run the Optimizer (the Optimizer must not necessarily be launched on the same machine where HSO is running), more details in [Optimizer](./Optimizer/README.md) :
->cd "path of Optimizer"  
->python deap_ga.py
-
+```
+    cd "path of Optimizer"  
+    python deap_ga.py
+```
 
