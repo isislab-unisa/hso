@@ -18,7 +18,7 @@ For more information about FlameGPU and its use, look at the documentation in th
 
 ## Create the Zombie model
 
-In the _Simulation\_Flame_ directory there a directory _Flame\_model_ that contains the necessary file to create the model with FlameGPU.  
+In the _Simulation\_Flame_ directory there is a directory _Flame\_model_ that contains the necessary file to create the model with FlameGPU.  
 To create and build  the Zombie example follow this step:
 
 - Go to the _examples_ directory of FlameGPU
