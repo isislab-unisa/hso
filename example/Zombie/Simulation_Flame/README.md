@@ -25,7 +25,7 @@ To create and build  the Zombie example follow this step:
 - Copy the directory _Template_ and rename the directory just copied as Zombie_Partitioning  
 - Go to the _Zombie\_Partitioning/src/model_ 
 - Replace the _function.c_ and _XMLModelFile.xml_ files with those in the _Flame\_model_ folder
-- Go to the _Zombie\_Partitioning directory and build the example using "make"
+- Go to the _Zombie\_Partitioning_ directory and build the example using "make"
 
 
 After doing this you can run the example by launching the Zombie_Partitioning_console.sh script located in the _bin_ folder of FlameGPU.
