@@ -9,6 +9,7 @@ This is a Java wrapper to execute NetLogo models from command line available on 
 
 First, download in this folder the files from [GitHub repository](https://github.com/spagnuolocarmine/swiftlangabm/tree/master/netlogo), and follow the instructions in the README file to build the project.
 
+###Run the poject
 In the folder, a script was written to launch the project. This is the script that the optimizer will tell HSO to use for the simulation to run on the CPU.
 
 cpu_script.sh:
