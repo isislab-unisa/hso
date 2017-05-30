@@ -9,8 +9,6 @@ First of all we need install FlameGPU on the machine, to do this:
 1. Download FlameGPU from the [download link](http://www.flamegpu.com/downloads/links).
 2. Unzip the file just downloaded  
 
-> Note: for the example, I have unpacked the zip file in the Simulation_Flame folder, and the script written for simulation uses this assumption, if you want to unpack FlameGPU in a different folder, you must take this into account and edit the script with the Appropriate path
-
 3. Go to the _examples_ directory and build all example or just the one you want, look at the READ ME (makefiles) file in the FlameGPU directory
 
 
