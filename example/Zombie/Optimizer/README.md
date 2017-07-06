@@ -59,7 +59,7 @@ evalQ.send(gpu_model)
 
 Before running the Optimizer make sure you have the following requirements:
 
-- Python 
+- Python
 - Numpy, the fundamental package for scientific computing with Python
 - pandas (Python Data Analysis Library), is an open source, BSD-licensed library providing high-performance, easy-to-use data structures and data analysis tools for the Python programming language.
 - DEAP is a novel evolutionary computation framework for rapid prototyping and testing of ideas
@@ -73,7 +73,3 @@ To run the Optimizer
 ```
     python deap_ga.py
 ```
-#### Example output
-
-
-

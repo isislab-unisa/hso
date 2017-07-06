@@ -32,6 +32,8 @@ The model is characterized by:
 
 In the Simulation Optimization process we want to find the value of these parameters that maximize the number of alive Humans after the simulation is completed.
 
+For the implementation of the Zombie example see [Optimizer](./Optimizer/README.md), [Netlogo simulation](./Simulation_Netlogo/README.md), [FlameGPU simulation](./Simulation_Flame/README.md)
+
 ## Run the example
 
 Before run the example, you must make these preliminary steps:
@@ -52,4 +54,3 @@ After completing these preliminary steps:
     cd "path of Optimizer"  
     python deap_ga.py
 ```
-

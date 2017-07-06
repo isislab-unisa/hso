@@ -7,26 +7,29 @@
 #include <signal.h>
 #include <assert.h>
 #include <pthread.h>
-#include <arpa/inet.h>
+#include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
-#include <ifaddrs.h>
-#include <linux/if_link.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <net/if.h>
+#include <arpa/inet.h>
 #include <zmq.h>
 
 #include "libs/zhelpers.h"
 
-#define VERBOSE 1
+#define VERBOSE  0
 #define VERBOSE_MASTER 1
 #define VERBOSE_THREAD 0
 
 typedef struct cpu_thread_data {
+	int index;
 	char *params;
 	char *model;
 	char *result;
 } cpu_thread_data;
 
 typedef struct gpu_thread_data {
+	int index;
 	char *params;
 	char *model;
 	int gpu_id;
@@ -52,6 +55,7 @@ void *gpufunction(void *arg){
 	gpu_thread_data *mtdata=(gpu_thread_data *)arg;
 	strcpy(mtdata->result,"");
 	if(strcmp(mtdata->params,"null")!=0){
+		//strcpy(list_output,"");
 		int command_size=((7+strlen(mtdata->model)+strlen(mtdata->params)*sizeof(char))+sizeof(int));
 		command = (char *) realloc(command,command_size);
 		sprintf(command,"./%s \"%s\" %d",mtdata->model,mtdata->params,mtdata->gpu_id);
@@ -68,7 +72,9 @@ void *gpufunction(void *arg){
 		while (fgets(line, sizeof(line), fd) != NULL) {
 		}
 		pclose(fd);
-
+		int len = strlen(line);
+		if(line[len-1]=='\n')
+			line[len-1]='\0';
 		mtdata->result = (char*) realloc (mtdata->result,(strlen(line)+1)*sizeof(char));
 		strcpy(mtdata->result,line);
 	}else{
@@ -113,18 +119,28 @@ void *cpufunction (void *arg){
 
 int numGpus(){
 	char result[100];
-	FILE *fd = popen("lspci | grep NVIDIA |wc -l", "r");
+	FILE *fd = popen("lspci | grep NVIDIA | wc -l", "r");
 	if(fd == NULL){
-		printf("Failed to run \"lspci | grep NVIDIA |wc -l\"\n");
+		printf("Failed to run \"nvidia-smi -L | wc -l\"\n");
 		exit(1);
 	}
 	fgets(result, sizeof(result), fd);
+	if (atoi(result)!=0){
+		FILE *fd2 = popen("nvidia-smi -L | wc -l", "r");
+		if(fd2 == NULL){
+			printf("Failed to run \"nvidia-smi -L | wc -l\"\n");
+			exit(1);
+		}	
+		fgets(result, sizeof(result), fd);
+		pclose(fd2);	
+		return atoi(result);
+	}
 	pclose(fd);
-	return atoi(result);
+	return 0;
 }
 
 int numCpus(){
-	FILE *fd = popen("lscpu | grep Socket", "r");
+	FILE *fd = popen("grep -i \"physical id\" /proc/cpuinfo | sort -u | wc -l", "r");
 	if (fd == NULL) {
 		printf("Failed to run \"lscpu | grep Socket\"\n" );
 		exit(1);
@@ -133,52 +149,14 @@ int numCpus(){
 	fgets(tmp, sizeof(tmp), fd);
 	pclose(fd);
 	int size;
-	char ** res = split(tmp,":",&size);
-	int nSock = atoi(res[1]);
-	return nSock;
-}
-
-char* getAddress(){
-	struct ifaddrs *ifaddr, *ifa;
-	int family, s, n;
-	char result[NI_MAXHOST],host[NI_MAXHOST];
-
-	if (getifaddrs(&ifaddr) == -1) {
-		perror("getifaddrs");
-		exit(EXIT_FAILURE);
-	}
-
-	for (ifa = ifaddr, n = 0; ifa != NULL; ifa = ifa->ifa_next, n++) {
-		if (ifa->ifa_addr == NULL)
-			continue;
-		family = ifa->ifa_addr->sa_family;
-		if(family == AF_INET){
-			s = getnameinfo(ifa->ifa_addr,
-					(family == AF_INET) ? sizeof(struct sockaddr_in) :
-							sizeof(struct sockaddr_in6),
-							host, NI_MAXHOST,
-							NULL, 0, NI_NUMERICHOST);
-			if (s != 0) {
-				printf("getnameinfo() failed: %s\n", gai_strerror(s));
-				exit(EXIT_FAILURE);
-			}
-			if(strcmp(ifa->ifa_name,"lo")!=0){
-				strcpy(result,host);
-				break;
-			}
-		}
-	}
-	freeifaddrs(ifaddr);
-	return result;
+	return atoi(tmp);
 }
 
 void *context,*evalQ,*outQ;
 
 int main(int argc, char *argv[]){
-	float balance_factor=0.5;
 	int numtasks,rank;
 	MPI_Status stat;
-
 	//initialize MPI
 	MPI_Init(&argc,&argv);
 	MPI_Comm_size(MPI_COMM_WORLD,&numtasks);
@@ -186,11 +164,11 @@ int main(int argc, char *argv[]){
 
 	char *buff,*cpu_model,*gpu_model;
 	int cpu_model_size,gpu_model_size;
-	int ncpu[numtasks], ngpu[numtasks],rcpu[numtasks],rgpu[numtasks];
+	int ncpu[numtasks], ngpu[numtasks],rcpu[numtasks],rgpu[numtasks],num_cpu,num_gpu;
 	int number[2];
 	if(rank==0){ // master
-		ncpu[0]=numCpus();
-		ngpu[0]=numGpus();
+		ncpu[0]=0;
+		ngpu[0]=0;
 		for (int i=1;i<numtasks;i++){
 			MPI_Recv(&number,2,MPI_INT, i ,0,MPI_COMM_WORLD,&stat);
 			ncpu[i]=number[0];
@@ -202,9 +180,18 @@ int main(int argc, char *argv[]){
 				printf("CPU rank %d = %d -- GPU rank %d =%d\n",i,ncpu[i],i,ngpu[i]);
 			}
 		}
-		char *ipaddr=getAddress();
-		char *path_eval=(char *) malloc((strlen(ipaddr)+12)*sizeof(char));
-		sprintf(path_eval,"tcp://%s:5555");
+		int fd;
+		struct ifreq ifr;
+		fd = socket(AF_INET, SOCK_DGRAM, 0);
+		/* I want to get an IPv4 IP address */
+ 		ifr.ifr_addr.sa_family = AF_INET;
+ 		/* I want IP address attached to "eth0" */
+ 		strncpy(ifr.ifr_name, "eth0", IFNAMSIZ-1);
+		ioctl(fd, SIOCGIFADDR, &ifr);
+		close(fd);
+		char* path_eval= (char*)malloc(26*sizeof(char));
+		sprintf(path_eval,"tcp://%s:5555",inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+		//char* path_eval="tcp://172.16.142.111:5555";
 		if (VERBOSE_MASTER) {
 			printf("MASTER: path della coda di ascolto %s\n",path_eval);
 		}
@@ -251,7 +238,43 @@ int main(int argc, char *argv[]){
 					exit(1);
 				}
 				continue;
-			}else if(strcmp(evalQstr[0],"INIT_CPU")==0){
+			}else if(strcmp(evalQstr[0],"INIT_NUM")==0){
+				int t_cpu = atoi(evalQstr[1]);
+				int t_gpu = atoi(evalQstr[2]);
+				num_cpu = t_cpu;
+				num_gpu = t_gpu;
+				//printf("num_cpu %d num_gpu %d\n",num_cpu,num_gpu);
+				for(int i=0;i<numtasks;i++){
+					rcpu[i]=0;
+					rgpu[i]=0;
+				}
+				have_cpu=1;
+				have_gpu=1;
+				if(t_cpu==0){
+					have_cpu=0;
+				}
+				if(t_gpu==0){
+					have_gpu=0;
+				}
+				while(t_cpu>0 || t_gpu>0){
+				    for(int i=0;i<numtasks;i++){
+				        if(t_cpu>0 && rcpu[i]<ncpu[i]){
+				            rcpu[i]++;
+				            t_cpu--;
+				        }
+				        if (t_gpu>0 && rgpu[i]<ngpu[i]){
+				            rgpu[i]++;
+				            t_gpu--;
+				        }
+					//printf("MASTER: ncpu[%d] = %d - rcpu[%d] = %d --- ngpu[%d] = %d - rgpu[%d] = %d\n",i,ncpu[i],i,rcpu[i],i, ngpu[i],i,rgpu[i]);
+				    }
+				}
+				if(VERBOSE_MASTER){
+						printf("MASTER: aggiornate risorse disponibili\n");
+				}
+				continue;
+			}
+			else if(strcmp(evalQstr[0],"INIT_CPU")==0){
 				cpu_model_size=strlen(evalQstr[1]);
 				cpu_model = (char*) malloc((cpu_model_size+1)*sizeof(char));
 				strcpy(cpu_model,evalQstr[1]);
@@ -271,7 +294,7 @@ int main(int argc, char *argv[]){
 				strcpy(gpu_model,evalQstr[1]);
 				char *models = (char*) malloc((cpu_model_size+gpu_model_size+14)*sizeof(char));
 				sprintf(models,"::MODEL::%s::%s::",cpu_model,gpu_model);
-				if (VERBOSE) {
+				if (VERBOSE_MASTER) {
 					printf("MASTER: aggiornati i modelli delle simulazioni\nmodello CPU: %s\nmodello GPU: %s\n ",cpu_model,gpu_model);
 				}
 				int models_size =strlen(models)+1;
@@ -279,7 +302,7 @@ int main(int argc, char *argv[]){
 					MPI_Send(&models_size,1,MPI_INT,i,0,MPI_COMM_WORLD);
 					MPI_Send(models,models_size,MPI_CHAR,i,0,MPI_COMM_WORLD);
 				}
-				if (VERBOSE) {
+				if (VERBOSE_MASTER) {
 					printf("MASTER: propagazione modelli agli slave effettuata\n");
 				}
 				continue;
@@ -296,10 +319,12 @@ int main(int argc, char *argv[]){
 					simcpu=0;
 				}
 				if(have_cpu && have_gpu){
-					simcpu=n_params*balance_factor;
+					printf("num_cpu %d num_gpu %d\n",num_cpu,num_gpu);
+					int tmp = n_params /(num_cpu+num_gpu);
+					simcpu=num_cpu*tmp;
 					simgpu = n_params-simcpu;
 				}
-				if (VERBOSE) {
+				if (VERBOSE_MASTER) {
 					printf("MASTER: # simulazioni CPU: %d, # simulazioni GPU: %d\n",simcpu,simgpu);
 				}
 				char *params_split[numtasks];
@@ -308,44 +333,140 @@ int main(int argc, char *argv[]){
 					strcpy(params_split[i],"");
 				}
 
+				char *tmp_cpu_params[numtasks];
+				char *tmp_gpu_params[numtasks];
+
+				int a_taskcpu[numtasks];
+				for (int i=0;i<numtasks;i++){
+					a_taskcpu[i]=0;
+				}
+				int a_taskgpu[numtasks];
+				for (int i=0;i<numtasks;i++){
+					a_taskgpu[i]=0;
+				}
+
+				for(int i=0;i<numtasks;i++){
+					tmp_cpu_params[i]=(char*)malloc(sizeof(char));
+					strcpy(tmp_cpu_params[i],"");
+				}
+				
+				for(int i=0;i<numtasks;i++){
+					tmp_gpu_params[i]=(char*)malloc(sizeof(char));
+					strcpy(tmp_gpu_params[i],"");
+				}
+
 				int count = 0;
 				while (count<n_params) { //finchè ci sono ancora parametri da asseggnare
-					for(int i = 0;i<numtasks;i++){ //sorta di round robin sui task disponibili
-						params_split[i]=(char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+					for(int i=1;i<numtasks;i++){
+						if(a_taskcpu[i] == ncpu[i] && a_taskgpu[i] == ngpu[i]){
+							params_split[i] = (char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+							strcat(params_split[i],":CPU:");
+							if(strcmp(tmp_cpu_params[i],"")==0){
+								params_split[i]=(char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+								strcat(params_split[i],"none;");
+							}else{
+								params_split[i] = (char*) realloc(params_split[i],(strlen(params_split[i])+strlen(tmp_cpu_params[i])+1)*sizeof(char));
+								strcat(params_split[i],tmp_cpu_params[i]);
+							}
+							params_split[i] = (char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+							strcat(params_split[i],":GPU:");
+							if(strcmp(tmp_gpu_params[i],"")==0){
+								params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+								strcat(params_split[i],"none;");
+							}else{
+								params_split[i] = (char*) realloc(params_split[i],(strlen(params_split[i])+strlen(tmp_gpu_params[i])+1)*sizeof(char));
+								strcat(params_split[i],tmp_gpu_params[i]);
+							}
+							params_split[i] = (char*) realloc(params_split[i],(strlen(params_split[i])+3)*sizeof(char));
+							strcat(params_split[i],":-");
+							tmp_cpu_params[i]=(char*)malloc(sizeof(char));
+							tmp_gpu_params[i]=(char*)malloc(sizeof(char));
+							strcpy(tmp_cpu_params[i],"");
+							strcpy(tmp_gpu_params[i],"");
+							a_taskcpu[i]=0;
+							a_taskgpu[i]=0;
+							continue;
+						}else{
+							if(a_taskcpu[i]<ncpu[i]){
+								if(simcpu>0 && count<n_params && a_taskcpu[i]<rcpu[i]){
+									char *tmp_value=(char*) malloc((sizeof(int)+2+strlen(list_params[count]))*sizeof(char));
+									sprintf(tmp_value,"%d#%s",count,list_params[count]);
+									tmp_cpu_params[i]= (char*) realloc(tmp_cpu_params[i],(strlen(tmp_cpu_params[i])+strlen(tmp_value)+1)*sizeof(char));
+									strcat(tmp_cpu_params[i],tmp_value);
+									tmp_cpu_params[i]= (char*) realloc(tmp_cpu_params[i],(strlen(tmp_cpu_params[i])+2)*sizeof(char));
+									strcat(tmp_cpu_params[i],";");
+									simcpu--;
+									count++;
+								}else{
+									tmp_cpu_params[i]= (char*) realloc(tmp_cpu_params[i],(strlen(tmp_cpu_params[i])+6)*sizeof(char));
+									strcat(tmp_cpu_params[i],"null;");
+								}
+								a_taskcpu[i]++;
+							}
+							if(a_taskgpu[i]<ngpu[i]){
+								if(simgpu>0 && count<n_params && a_taskgpu[i]<rgpu[i]){
+									char *tmp_value=(char*) malloc((sizeof(int)+2+strlen(list_params[count]))*sizeof(char));;
+									sprintf(tmp_value,"%d#%s",count,list_params[count]);
+									tmp_gpu_params[i]= (char*) realloc(tmp_gpu_params[i],(strlen(tmp_gpu_params[i])+strlen(tmp_value)+1)*sizeof(char));
+									strcat(tmp_gpu_params[i],tmp_value);
+									tmp_gpu_params[i]= (char*) realloc(tmp_gpu_params[i],(strlen(tmp_gpu_params[i])+2)*sizeof(char));
+									strcat(tmp_gpu_params[i],";");
+									simgpu--;
+									count++;
+								}else{
+									tmp_gpu_params[i]= (char*) realloc(tmp_gpu_params[i],(strlen(tmp_gpu_params[i])+6)*sizeof(char));
+									strcat(tmp_gpu_params[i],"null;");
+								}
+								a_taskgpu[i]++;
+							}
+						}
+					}
+				}
+
+				for(int i=1;i<numtasks;i++){
+					if(strlen(tmp_cpu_params[i])>0 || strlen(tmp_gpu_params[i])>0){
+						params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+ 6)*sizeof(char));
 						strcat(params_split[i],":CPU:");
-						for(int j=0;j<ncpu[i];j++){
-							if(simcpu>0 && count<n_params){ //se ho ancora dei parametri di simulazioni da testare su cpu
-								params_split[i]=(char*)realloc(params_split[i],(strlen(params_split[i])+strlen(list_params[count])+1)*sizeof(char));
-								strcat(params_split[i],list_params[count]);
-								params_split[i]=(char*)realloc(params_split[i],(strlen(params_split[i])+2)*sizeof(char));
-								strcat(params_split[i],";");
-								count++;
-								simcpu--;
-							}else{
-								params_split[i]=(char*)realloc(params_split[i],(strlen(params_split[i])+5)*sizeof(char));
-								strcat(params_split[i],"null");
-								params_split[i]=(char*)realloc(params_split[i],(strlen(params_split[i])+2)*sizeof(char));
-								strcat(params_split[i],";");
+						int temp;
+						char **tmp = split(tmp_cpu_params[i],";",&temp);
+						if(ncpu[i]==0){
+							params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+							strcat(params_split[i],"none;");
+						}else{
+							for(int j=0;j<ncpu[i];j++){
+								if(j<temp){
+									params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+strlen(tmp[j])+1)*sizeof(char));
+									strcat(params_split[i],tmp[j]);
+									params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+2)*sizeof(char));
+									strcat(params_split[i],";");
+								}else{
+									params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+									strcat(params_split[i],"null;");
+								}
 							}
 						}
-						params_split[i]=(char*)realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+						params_split[i]=(char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
 						strcat(params_split[i],":GPU:");
-						for(int j=0;j<ngpu[i];j++){
-							if(simgpu>0 && count<n_params){ //se ho ancora dei parametri di simulazioni da testare su gpu
-								params_split[i]=(char*) realloc(params_split[i],(strlen(params_split[i])+strlen(list_params[count])+1)*sizeof(char));
-								strcat(params_split[i],list_params[count]);
-								params_split[i]=(char*) realloc(params_split[i],(strlen(params_split[i])+2)*sizeof(char));
-								strcat(params_split[i],";");
-								count++;
-								simgpu--;
-							}else{
-								params_split[i]=(char*) realloc(params_split[i],(strlen(params_split[i])+5)*sizeof(char));
-								strcat(params_split[i],"null");
-								params_split[i]=(char*) realloc(params_split[i],(strlen(params_split[i])+2)*sizeof(char));
-								strcat(params_split[i],";");
+						tmp = split(tmp_gpu_params[i],";",&temp);
+
+						if(ngpu[i]==0){
+							params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+							strcat(params_split[i],"none;");
+						}else{
+							for(int j=0;j<ngpu[i];j++){
+								if(j<temp){
+									params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+strlen(tmp[j])+1)*sizeof(char));
+									strcat(params_split[i],tmp[j]);
+									params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+2)*sizeof(char));
+									strcat(params_split[i],";");
+								}else{
+									params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
+									strcat(params_split[i],"null;");
+								}
 							}
+
 						}
-						params_split[i]=(char*) realloc(params_split[i],(strlen(params_split[i])+3)*sizeof(char));
+						params_split[i]= (char*) realloc(params_split[i],(strlen(params_split[i])+3)*sizeof(char));
 						strcat(params_split[i],":-");
 					}
 				}
@@ -367,92 +488,54 @@ int main(int argc, char *argv[]){
 				list_output = (char*) malloc(9*sizeof(char));
 				strcpy(list_output,"OUTPUT::");
 
-				/*INIZIO COMPUTAZIONE LOCALE*/
-				if (VERBOSE) {
-					printf("MASTER: inizio computazione locale\n");
-				}
-				char ** iteration_param = split(params_split[0],"-",&split_size);
-				for(int i = 0;i<split_size;i++){
-					int temp_size;
-					char** temp_split = split(iteration_param[i],":",&temp_size);
-					int num_param_cpu;
-					char** cpu_params = split(temp_split[1],";",&num_param_cpu);
-					int num_param_gpu;
-					char** gpu_params = split(temp_split[3],";",&num_param_gpu);
-					pthread_t cpu_thread[num_param_cpu];
-					pthread_t gpu_thread[num_param_gpu];
-					cpu_thread_data data_cpu[num_param_cpu];
-					gpu_thread_data data_gpu[num_param_gpu];
-					for(int j=0;j<num_param_cpu;j++){
-						data_cpu[j].params = (char*)malloc((strlen(cpu_params[j])+1)*sizeof(char));
-						strcpy(data_cpu[j].params, cpu_params[j]);
-						data_cpu[j].model = (char*)malloc((strlen(cpu_model)+1)*sizeof(char));
-						strcpy(data_cpu[j].model , cpu_model);
-						data_cpu[j].result = (char*)malloc(sizeof(char));
-					}
-					for(int j=0;j<num_param_gpu;j++){
-						data_gpu[j].params = (char*)malloc((strlen(gpu_params[j])+1)*sizeof(char));
-						strcpy(data_gpu[j].params, gpu_params[j]);
-						data_gpu[j].model = (char*)malloc((strlen(gpu_model)+1)*sizeof(char));
-						strcpy(data_gpu[j].model , gpu_model);
-						data_gpu[j].gpu_id=j;
-						data_gpu[j].result=(char*) malloc(sizeof(char));
-					}
-					for(int j=0;j<num_param_cpu;j++){
-						pthread_create(&cpu_thread[j],NULL,cpufunction,(void*) &data_cpu[j]);
-					}
-					for(int j=0;j<num_param_gpu;j++){
-						pthread_create(&gpu_thread[j],NULL,gpufunction,(void*) &data_gpu[j]);
-					}
-					for(int j=0;j<num_param_cpu;j++){
-						pthread_join(cpu_thread[j],NULL);
-					}
+				char *array_output[n_params];
+				char *array_result[n_params];
 
-					for(int j=0;j<num_param_gpu;j++){
-						pthread_join(gpu_thread[j],NULL);
-					}
-					for(int j=0;j<num_param_cpu;j++){
-						if(strcmp(data_cpu[j].result,"null")!=0){
-							int tmp_size;
-							char **tmp = split(data_cpu[j].result," ",&tmp_size);
-							list_output=(char*) realloc(list_output,(strlen(list_output)+strlen(tmp[1])+1)*sizeof(char));
-							strcat(list_output,tmp[1]);
-							list_output=(char*) realloc(list_output,(strlen(list_output)+2)*sizeof(char));
-							strcat(list_output,";");
-						}
-					}
-					for(int j=0;j<num_param_gpu;j++){
-						if(strcmp(data_gpu[j].result,"null")!=0){
-							int tmp_size;
-							char **tmp =split(data_gpu[j].result," ",&tmp_size);
-							list_output=(char*) realloc(list_output,(strlen(list_output)+strlen(tmp[1])+1)*sizeof(char));
-							strcat(list_output,tmp[1]);
-							list_output=(char*) realloc(list_output,(strlen(list_output)+2)*sizeof(char));
-							strcat(list_output,";");
-						}
-					}
-
+				for(int i = 0;i<numtasks;i++){
+					array_result[i]= (char *) malloc (sizeof(char));
+					strcpy(array_result[i],"");
 				}
-				/*FINE COMPUTAZIONE LOCALNE*/
-				if (VERBOSE) {
-					printf("MASTER: fine computazione locale\n");
-					printf("MASTER: output locale: %s\n",list_output);
-					printf("MASTER: raccolta output degli slave\n");
-				}
+				
 				for(int i=1;i<numtasks;i++){
 					int size=0;
 					MPI_Recv(&size,1,MPI_INT,i,0,MPI_COMM_WORLD,&stat);
-					char * result=(char*)malloc(size*sizeof(char));
-					MPI_Recv(result,size,MPI_CHAR,i,0,MPI_COMM_WORLD,&stat);
-					list_output=(char*) realloc(list_output,(strlen(list_output)+strlen(result)+1)*sizeof(char));
-					strcat(list_output,result);
+					array_result[i]=(char*)malloc(size*sizeof(char));
+					MPI_Recv(array_result[i],size,MPI_CHAR,i,0,MPI_COMM_WORLD,&stat);
+					if (VERBOSE)
+					{
+						printf("MASTER ho ricevuto da rank %d: %s\n",i,array_result[i]);
+
+					}
 				}
+
+				for(int i=1;i<numtasks;i++){
+					int result_split_size;
+					char **result_split = split(array_result[i],";",&result_split_size);
+					for (int j = 0; j < result_split_size ; j++)
+					{
+						int tmp_size;
+						char **tmp_split = split(result_split[j],"#",&tmp_size);
+						int index = atoi(tmp_split[0]);
+						array_output[index]=(char*)malloc((strlen(tmp_split[1])+1)*sizeof(char));
+						strcpy(array_output[index],tmp_split[1]);
+					}
+				}
+				//printf("woow\n");
+				for (int i = 0; i < n_params; i++)
+				{
+					list_output = (char*) realloc(list_output,(strlen(list_output)+strlen(array_output[i])+1)*sizeof(char));
+					strcat(list_output,array_output[i]);
+					list_output = (char*) realloc(list_output,(strlen(list_output)+2)*sizeof(char));
+					strcat(list_output,";");
+				}
+
 				int size=strlen(list_output);
 				if(list_output[size-1]==';'){
 					list_output[size-1]='\0';
 				}
 				list_output=(char*) realloc(list_output,(strlen(list_output)+3)*sizeof(char));
 				strcat(list_output,"::");
+				printf("%s\n",list_output);
 				if (VERBOSE) {
 					printf("MASTER output globale: %s\n",list_output );
 				}
@@ -466,8 +549,14 @@ int main(int argc, char *argv[]){
 		}
 
 	}else{ //slave
-		number[0]=numCpus();
+		
 		number[1]=numGpus();
+		if(number[1]!=0){
+			number[0]=0;
+		}else{
+			number[0]=numCpus();
+		}
+		
 		MPI_Send(&number,2,MPI_INT,0,0,MPI_COMM_WORLD);
 		//retrieve the parameter for simulations
 		while(1){
@@ -507,15 +596,35 @@ int main(int argc, char *argv[]){
 				cpu_thread_data data_cpu[num_param_cpu];
 				gpu_thread_data data_gpu[num_param_gpu];
 				for(int j=0;j<num_param_cpu;j++){
-					data_cpu[j].params = (char*)malloc((strlen(cpu_params[j])+1)*sizeof(char));
-					strcpy(data_cpu[j].params,cpu_params[j]);
+					if((strcmp(cpu_params[j],"null")!=0) && (strcmp(cpu_params[j],"none")!=0) ){
+						int tmp_size;
+						char **t_split = split(cpu_params[j],"#",&tmp_size);
+						data_cpu[j].index=atoi(t_split[0]);
+						data_cpu[j].params = (char*)malloc((strlen(t_split[1])+1)*sizeof(char));
+						strcpy(data_cpu[j].params, t_split[1]);
+					}else{
+						data_cpu[j].index=-1;
+						data_cpu[j].params = (char*)malloc((5)*sizeof(char));
+						strcpy(data_cpu[j].params, "null");
+					}
+					
 					data_cpu[j].model = (char*)malloc((strlen(cpu_model)+1)*sizeof(char));
 					strcpy(data_cpu[j].model , cpu_model);
 					data_cpu[j].result=(char*) malloc(sizeof(char));
 				}
 				for(int j=0;j<num_param_gpu;j++){
-					data_gpu[j].params = (char*)malloc((strlen(gpu_params[j])+1)*sizeof(char));
-					strcpy(data_gpu[j].params ,gpu_params[j]);
+					if((strcmp(gpu_params[j],"null")!=0) && (strcmp(gpu_params[j],"none")!=0)){
+						int tmp_size;
+						char **t_split = split(gpu_params[j],"#",&tmp_size);
+						data_gpu[j].index=atoi(t_split[0]);
+						data_gpu[j].params = (char*)malloc((strlen(t_split[1])+1)*sizeof(char));
+						strcpy(data_gpu[j].params, t_split[1]);
+					}else{
+						data_gpu[j].index=-1;
+						data_gpu[j].params = (char*)malloc((5)*sizeof(char));
+						strcpy(data_gpu[j].params, "null");
+					}
+					
 					data_gpu[j].model = (char*)malloc((strlen(gpu_model)+1)*sizeof(char));
 					strcpy(data_gpu[j].model , gpu_model);
 					data_gpu[j].gpu_id=j;
@@ -539,8 +648,10 @@ int main(int argc, char *argv[]){
 					if(strcmp(data_cpu[j].result,"null")!=0){
 						int tmp_size;
 						char **tmp = split(data_cpu[j].result," ",&tmp_size);
-						output = (char*) realloc(output,(strlen(output)+strlen(tmp[1])+1)*sizeof(char));
-						strcat(output,tmp[1]);
+						char *tmp_value=(char*) malloc((sizeof(int)+2+strlen(tmp[1]))*sizeof(char));;
+						sprintf(tmp_value,"%d#%s",data_cpu[j].index,tmp[1]);
+						output = (char*) realloc(output,(strlen(output)+strlen(tmp_value)+1)*sizeof(char));
+						strcat(output,tmp_value);
 						output = (char*) realloc(output,(strlen(output)+2)*sizeof(char));
 						strcat(output,";");
 					}
@@ -549,8 +660,10 @@ int main(int argc, char *argv[]){
 					if(strcmp(data_gpu[j].result,"null")!=0){
 						int tmp_size;
 						char **tmp =split(data_gpu[j].result," ",&tmp_size);
-						output = (char*) realloc(output,(strlen(output)+strlen(tmp[1])+1)*sizeof(char));
-						strcat(output,tmp[1]);
+						char *tmp_value=(char*) malloc((sizeof(int)+2+strlen(tmp[1]))*sizeof(char));;
+						sprintf(tmp_value,"%d#%s",data_gpu[j].index,tmp[1]);
+						output = (char*) realloc(output,(strlen(output)+strlen(tmp_value)+1)*sizeof(char));
+						strcat(output,tmp_value);
 						output = (char*) realloc(output,(strlen(output)+2)*sizeof(char));
 						strcat(output,";");
 					}
@@ -564,4 +677,3 @@ int main(int argc, char *argv[]){
 	MPI_Finalize();
 	exit(0);
 }
-
