@@ -142,7 +142,7 @@ int numGpus(){
 int numCpus(){
 	FILE *fd = popen("grep -i \"physical id\" /proc/cpuinfo | sort -u | wc -l", "r");
 	if (fd == NULL) {
-		printf("Failed to run \"lscpu | grep Socket\"\n" );
+		printf("Failed to run grep -i \"physical id\" /proc/cpuinfo | sort -u | wc -l\n" );
 		exit(1);
 	}
 	char tmp[30];
@@ -191,7 +191,7 @@ int main(int argc, char *argv[]){
 		close(fd);
 		char* path_eval= (char*)malloc(26*sizeof(char));
 		sprintf(path_eval,"tcp://%s:5555",inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
-		//char* path_eval="tcp://172.16.142.111:5555";
+		
 		if (VERBOSE_MASTER) {
 			printf("MASTER: path della coda di ascolto %s\n",path_eval);
 		}
@@ -211,7 +211,7 @@ int main(int argc, char *argv[]){
 			int size=atoi(buff);
 			buff=(char*) malloc ((size+1)*sizeof(char));
 			zmq_recv(evalQ,buff,size,0);
-			buff[size]='\0'; //aggiungere carattere di terminazione alla stringa
+			buff[size]='\0'; 
 			if(buff==NULL){
 				printf("MASTER: error in receiving the request\n");
 				exit(1);
@@ -243,7 +243,7 @@ int main(int argc, char *argv[]){
 				int t_gpu = atoi(evalQstr[2]);
 				num_cpu = t_cpu;
 				num_gpu = t_gpu;
-				//printf("num_cpu %d num_gpu %d\n",num_cpu,num_gpu);
+				
 				for(int i=0;i<numtasks;i++){
 					rcpu[i]=0;
 					rgpu[i]=0;
@@ -266,7 +266,6 @@ int main(int argc, char *argv[]){
 				            rgpu[i]++;
 				            t_gpu--;
 				        }
-					//printf("MASTER: ncpu[%d] = %d - rcpu[%d] = %d --- ngpu[%d] = %d - rgpu[%d] = %d\n",i,ncpu[i],i,rcpu[i],i, ngpu[i],i,rgpu[i]);
 				    }
 				}
 				if(VERBOSE_MASTER){
@@ -282,7 +281,7 @@ int main(int argc, char *argv[]){
 				size=atoi(buff);
 				buff=(char*) malloc ((size+1)*sizeof(char));
 				zmq_recv(evalQ,buff,size,0);
-				buff[size]='\0'; //aggiungere carattere di terminazione alla stringa
+				buff[size]='\0';
 				if(buff==NULL){
 					printf("MASTER: error in receiving the request\n");
 					exit(1);
@@ -356,7 +355,7 @@ int main(int argc, char *argv[]){
 				}
 
 				int count = 0;
-				while (count<n_params) { //finchè ci sono ancora parametri da asseggnare
+				while (count<n_params) { 
 					for(int i=1;i<numtasks;i++){
 						if(a_taskcpu[i] == ncpu[i] && a_taskgpu[i] == ngpu[i]){
 							params_split[i] = (char*) realloc(params_split[i],(strlen(params_split[i])+6)*sizeof(char));
@@ -476,7 +475,7 @@ int main(int argc, char *argv[]){
 						printf("parametri simulazioni rank %d: %s\n",i,params_split[i]);
 					}
 				}
-				for(int i=1;i<numtasks;i++){ // invia i parametri delle simulazioni agli slave
+				for(int i=1;i<numtasks;i++){ 
 					int size = strlen(params_split[i])+1;
 					MPI_Send(&size,1,MPI_INT,i,0,MPI_COMM_WORLD);
 					MPI_Send(params_split[i],size,MPI_CHAR,i,0,MPI_COMM_WORLD);
@@ -484,7 +483,7 @@ int main(int argc, char *argv[]){
 				if(VERBOSE){
 					printf("MASTER: parametri inviati agli slave\n");
 				}
-				char *list_output; //stringa da inviare su outQ
+				char *list_output;
 				list_output = (char*) malloc(9*sizeof(char));
 				strcpy(list_output,"OUTPUT::");
 
@@ -520,7 +519,6 @@ int main(int argc, char *argv[]){
 						strcpy(array_output[index],tmp_split[1]);
 					}
 				}
-				//printf("woow\n");
 				for (int i = 0; i < n_params; i++)
 				{
 					list_output = (char*) realloc(list_output,(strlen(list_output)+strlen(array_output[i])+1)*sizeof(char));
