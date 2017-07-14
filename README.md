@@ -48,7 +48,7 @@ In the initialization phase, the coordinated execution between the HSO Master (a
 After the initialization phase, the coordinated execution between the HSO Master (and Slaves) and  the Optimizer follows this pattern:
 
 1. The Optimizer send the list of parameters to the HSO Master.
-2. The HSO Master, received the list, divides it and starts running the simulations by distributing them to themselves and to the Slaves (for the time being, the HSO Master uses a round robin algorithm to distribute the workload). And waits for the slave result.
+2. The Master HSO, received this list, prepare and send to each Slave a string containing the list of parameters that the Slave must perform. The Master HSO is waiting for the results;
 3. The Slave, received the list of parameters, starts running the simulations. After finishing his simulations send the result to the HSO Master.
 4. The HSO Master collects the slave's output, concatenates his, and sends everything to the Optimizer.
 5. The Optimizer, received the output, makes its own consideration and decides whether to terminate or send a new parameter list.
