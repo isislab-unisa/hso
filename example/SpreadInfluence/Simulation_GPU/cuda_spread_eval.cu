@@ -61,17 +61,13 @@ int main(int argc, char *argv[])
 
 	char **inf_seq, **trs_seq;
 	int T, num_v,num_e;
-	//igraph_integer_t max_degree;
-	//igraph_matrix_t adjm;
 
 	fd = fopen(argv[1],"r");
 
 	igraph_read_graph_ncol(&graph,fd,NULL,1,IGRAPH_ADD_WEIGHTS_NO,IGRAPH_UNDIRECTED);
-	//igraph_to_undirected(&graph, IGRAPH_TO_UNDIRECTED_COLLAPSE,0);
 	fclose(fd);
 
 	inf_seq = split(argv[2],",");
-	//trs_seq = split(argv[3],",");
 	T=atoi(argv[3]);
 
 	num_v =igraph_vcount(&graph);
@@ -128,16 +124,11 @@ int main(int argc, char *argv[])
 
 	srand(time(NULL));
 	
-	//char **inf_seq_split = split(inf_seq,",");
 	for (int i = 0; i < num_v; ++i)
 	{
 		inf_v[i]=atoi(inf_seq[i]);
 	}
-	/*
-	for (int i = 0; i < num_v; ++i)
-	{
-		trs_v[i]=atoi(trs_seq[i]);
-	}*/
+
 
 	for (int i = 0; i < T; i++)
 	{
@@ -152,9 +143,6 @@ int main(int argc, char *argv[])
 
 	}		
 	
-
-	//printf("numero di vertici %d e numero di archi %d\n",num_v,num_e);
-
 	/* CALCULATE A0*/
 
 	cudaMalloc((void **) &d_inf_v,num_v*sizeof(int));
@@ -193,15 +181,10 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	//printf("A0: active_node %d\n",num_act_v);
-
 	int num_act_v_prec=0;
-	int count = 1;
 	while(num_act_v_prec!=num_act_v){
 		num_act_v_prec = num_act_v;
-		
 		num_act_v=0;
-
 		cudaMemcpy(d_act_v,act_v,num_v*sizeof(int),cudaMemcpyHostToDevice);
 		cudaMemcpy(d_result,res,num_v*sizeof(int),cudaMemcpyHostToDevice);
 
@@ -216,8 +199,6 @@ int main(int argc, char *argv[])
 				num_act_v++;
 			}
 		}
-		//printf("A%d: active_node %d\n",count,num_act_v);
-		count++;
 	}
 	/*RESULT*/
 	printf("final_active_node %d\n",num_act_v );
