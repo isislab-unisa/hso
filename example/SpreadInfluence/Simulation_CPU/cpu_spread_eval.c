@@ -17,38 +17,50 @@ char** split(char *string, char *del){
 	return str_res;
 }
 
-int diffusion (igraph_t graph,int inf_array[], int trs_array[],int act_array[],int res_array[],int num){
+int active (igraph_t graph,int inf_array[], int trs_array[],int act_array[],int res_array[],int num,int n_iter){
 	int num_act_v;
 	igraph_vs_t vs;
 	igraph_vit_t vit;
 	igraph_vs_t vs_all;
 	igraph_vit_t vit_all;
-	igraph_vs_all(&vs_all);
-	igraph_vit_create(&graph,vs_all,&vit_all);
-	while(!IGRAPH_VIT_END(vit_all)){
-		if(act_array[IGRAPH_VIT_GET(vit_all)]==1){
-			res_array[IGRAPH_VIT_GET(vit_all)]=1;
-		}
-		if(act_array[IGRAPH_VIT_GET(vit_all)]!=1){
+	if (n_iter == 0){
+		igraph_vs_all(&vs_all);
+		igraph_vit_create(&graph,vs_all,&vit_all);
+		while (!IGRAPH_VIT_END(vit_all)) {
 			int s_v = inf_array[IGRAPH_VIT_GET(vit_all)];
-			igraph_vs_adj(&vs,IGRAPH_VIT_GET(vit_all),IGRAPH_ALL);
-			igraph_vit_create(&graph,vs,&vit);
-			while(!IGRAPH_VIT_END(vit)){
-				if(act_array[IGRAPH_VIT_GET(vit)]==1){
-					s_v++;
-				}
-				IGRAPH_VIT_NEXT(vit);
-			}
-			igraph_vit_destroy(&vit);
-			igraph_vs_destroy(&vs);
-			if(s_v >= trs_array[IGRAPH_VIT_GET(vit_all)]){
+			if(s_v>=trs_array[IGRAPH_VIT_GET(vit_all)])
+			{
 				res_array[IGRAPH_VIT_GET(vit_all)]=1;
 			}
+			IGRAPH_VIT_NEXT(vit_all);
 		}
-		IGRAPH_VIT_NEXT(vit_all);
+		igraph_vit_destroy(&vit_all);
+		igraph_vs_destroy(&vs_all);
+	}else{
+		igraph_vs_all(&vs_all);
+		igraph_vit_create(&graph,vs_all,&vit_all);
+		while(!IGRAPH_VIT_END(vit_all)){
+			if(act_array[IGRAPH_VIT_GET(vit_all)]!=1){
+				int s_v = inf_array[IGRAPH_VIT_GET(vit_all)];
+				igraph_vs_adj(&vs,IGRAPH_VIT_GET(vit_all),IGRAPH_ALL);
+				igraph_vit_create(&graph,vs,&vit);
+				while(!IGRAPH_VIT_END(vit)){
+					if(act_array[IGRAPH_VIT_GET(vit)]==1){
+						s_v++;
+					}
+					IGRAPH_VIT_NEXT(vit);
+				}
+				igraph_vit_destroy(&vit);
+				igraph_vs_destroy(&vs);
+				if(s_v >= trs_array[IGRAPH_VIT_GET(vit_all)]){
+					res_array[IGRAPH_VIT_GET(vit_all)]=1;
+				}
+			}
+			IGRAPH_VIT_NEXT(vit_all);
+		}
+		igraph_vit_destroy(&vit_all);
+		igraph_vs_destroy(&vs_all);
 	}
-	igraph_vit_destroy(&vit_all);
-	igraph_vs_destroy(&vs_all);
 	num_act_v=0;
 	for (int i = 0; i < num; i++)
 	{
@@ -57,8 +69,6 @@ int diffusion (igraph_t graph,int inf_array[], int trs_array[],int act_array[],i
 			num_act_v++;
 		}
 	}
-
-	
 	return num_act_v;
 }
 
@@ -69,7 +79,7 @@ void main(int argc, char *argv[])
 		printf("Error: missing input parameter\n run: ./spread <graph_filepath> <influence sequence> <T>");
 		exit(1);
 	}
-	
+	/* code */
 	igraph_t graph;
 	FILE *fd;
 	igraph_vs_t vs;
@@ -78,19 +88,21 @@ void main(int argc, char *argv[])
 	igraph_vit_t vit_all;
 	char **inf_seq;
 	char **thr_seq;
-	int T, num_v,num_e;
+	int T, num_v,num_e,num_act_v,num_act_v_prec;
 
 	fd = fopen(argv[1],"r");
 
 	igraph_read_graph_ncol(&graph,fd,NULL,1,IGRAPH_ADD_WEIGHTS_NO,IGRAPH_UNDIRECTED);
+
 	fclose(fd);
 
 	inf_seq = split(argv[2],",");
-	T=atoi(argv[3]);
+	thr_seq = split(argv[3],",");
+
 
 	num_v =igraph_vcount(&graph);
 	num_e =igraph_ecount(&graph);
-	
+
 	int inf_v[num_v]; // vertex's influence values
 	int trs_v[num_v]; // vertex's threshold values
 	int act_v[num_v]; // vertex's activation values
@@ -103,53 +115,35 @@ void main(int argc, char *argv[])
 	}
 
 	srand(time(NULL));
-	
+
+
 	for (int i = 0; i < num_v; ++i)
 	{
 		inf_v[i]=atoi(inf_seq[i]);
 	}
 
-	for (int i = 0; i < T; i++)
+	for (int i = 0; i < num_v; ++i)
 	{
-		int r = rand()%num_v+0;
-		igraph_vs_adj(&vs,r,IGRAPH_ALL);
-		igraph_vit_create(&graph,vs,&vit);
-		if(trs_v[r]<IGRAPH_VIT_SIZE(vit)){
-			trs_v[r]++;
-		}
-		igraph_vit_destroy(&vit);
-		igraph_vs_destroy(&vs);
-
+		trs_v[i]=atoi(thr_seq[i]);
 	}
+
+	
 
 	/* CALCULATE A0*/
-	igraph_vs_all(&vs_all);
-	igraph_vit_create(&graph,vs_all,&vit_all);
-	int num_act_v=0;
-	while (!IGRAPH_VIT_END(vit_all)) {
-		int s_v = inf_v[IGRAPH_VIT_GET(vit_all)];
-		if(s_v>=trs_v[IGRAPH_VIT_GET(vit_all)])
-		{
-			act_v[IGRAPH_VIT_GET(vit_all)]=1;
-			num_act_v++;
-		}
 
-		IGRAPH_VIT_NEXT(vit_all);
+	int * res = (int*)calloc(num_v, sizeof(int));
 
-	}
-	igraph_vit_destroy(&vit_all);
-	igraph_vs_destroy(&vs_all);
-
-	int num_act_v_prec=0;
+	num_act_v = active(graph,inf_v,trs_v,act_v,res,num_v,0);
+	num_act_v_prec=0;
 
 	/*SPREAD DIFFUSION*/
+
 	while(num_act_v_prec!=num_act_v){
 		num_act_v_prec = num_act_v;
-		int * res = (int*)calloc(num_v, sizeof(int));
-		num_act_v = diffusion(graph,inf_v,trs_v,act_v,res,num_v);
+		num_act_v = active(graph,inf_v,trs_v,act_v,res,num_v,1);
 	}
 	/*RESULT*/
-	printf("final_active_node %d\n",num_act_v );
+	printf("final_active_node %d\n",num_act_v);
 	igraph_destroy(&graph);
 	exit(0);
 }

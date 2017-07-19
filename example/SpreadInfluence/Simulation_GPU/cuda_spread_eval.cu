@@ -6,7 +6,7 @@
 #include <cuda.h>
 #include <time.h>
 
-__global__ void actv(int *s, int *v, int *a, int *a_index,int *adj,int *d_result,int num_v,int i){
+__global__ void active(int *s, int *v, int *a, int *a_index,int *adj,int *d_result,int num_v,int i){
 	int index = threadIdx.x + blockIdx.x * blockDim.x;
 	if(index<num_v){
 		if(i==0){
@@ -14,23 +14,18 @@ __global__ void actv(int *s, int *v, int *a, int *a_index,int *adj,int *d_result
 			d_result[index]=1;
 			}
 		}else{
-			if(a[index]==1){
+			int sv = s[index];
+			int j = a_index[index];
+			while(adj[j]!=-1){
+				if (a[adj[j]]==1){
+					sv++;
+				}
+				j++;
+			}
+			if(sv>=v[index]){
 				d_result[index]=1;
-			}else{
-				int sv = s[index];
-				int j = a_index[index];
-				while(adj[j]!=-1){
-					if (a[adj[j]]==1){
-						sv++;
-					}
-					j++;
-				}
-				if(sv>=v[index]){
-					d_result[index]=1;
-				}
 			}
 		}
-		
 	}
 }
 
@@ -49,8 +44,8 @@ char** split(char *string, char *del){
 int main(int argc, char *argv[])
 {
 
-	if(argc <3){
-		printf("Error: missing input parameter\n run: ./gpu_spread <graph_filepath> <influence sequence> <T>");
+	if(argc<6){
+		printf("Error: missing input parameter\n run: ./gpu_spread <graph_filepath> <influence sequence> <T> <gpuid>");
 		exit(1);
 	}
 	/* code */
@@ -61,7 +56,7 @@ int main(int argc, char *argv[])
 
 	char **inf_seq, **trs_seq;
 	int T, num_v,num_e;
-
+	
 	fd = fopen(argv[1],"r");
 
 	igraph_read_graph_ncol(&graph,fd,NULL,1,IGRAPH_ADD_WEIGHTS_NO,IGRAPH_UNDIRECTED);
@@ -69,6 +64,13 @@ int main(int argc, char *argv[])
 
 	inf_seq = split(argv[2],",");
 	T=atoi(argv[3]);
+	cudaError_t cudaStatus;
+	printf("%s\n",argv[5] );
+	cudaStatus = cudaSetDevice(atoi(argv[5]));
+	if (cudaStatus != cudaSuccess) {
+		fprintf(stderr, "Error setting CUDA device!");
+		exit(0);
+	}
 
 	num_v =igraph_vcount(&graph);
 	num_e =igraph_ecount(&graph);
@@ -123,12 +125,12 @@ int main(int argc, char *argv[])
 	}
 
 	srand(time(NULL));
-	
+
+
 	for (int i = 0; i < num_v; ++i)
 	{
 		inf_v[i]=atoi(inf_seq[i]);
 	}
-
 
 	for (int i = 0; i < T; i++)
 	{
@@ -141,8 +143,9 @@ int main(int argc, char *argv[])
 		igraph_vit_destroy(&vit);
 		igraph_vs_destroy(&vs);
 
-	}		
-	
+	}
+
+
 	/* CALCULATE A0*/
 
 	cudaMalloc((void **) &d_inf_v,num_v*sizeof(int));
@@ -160,7 +163,7 @@ int main(int argc, char *argv[])
 	cudaMemcpy(d_adjlist,adj,size*sizeof(int),cudaMemcpyHostToDevice);
 
 
-	int thread = 8;
+	int thread = 512;
 	int block;
 	if(num_v%thread==0){
 		block = (num_v/thread);
@@ -171,7 +174,7 @@ int main(int argc, char *argv[])
 
 	int num_act_v=0;
 
-	actv<<<block,thread>>>(d_inf_v,d_trs_v,d_act_v,d_index,d_adjlist,d_result,num_v,0);
+	active<<<block,thread>>>(d_inf_v,d_trs_v,d_act_v,d_index,d_adjlist,d_result,num_v,0);
 	cudaMemcpy(res,d_result,num_v*sizeof(int),cudaMemcpyDeviceToHost);
 
 	for(int i=0;i<num_v;i++){
@@ -182,11 +185,14 @@ int main(int argc, char *argv[])
 	}
 
 	int num_act_v_prec=0;
+
 	while(num_act_v_prec!=num_act_v){
 		num_act_v_prec = num_act_v;
+
 		num_act_v=0;
+
 		cudaMemcpy(d_act_v,act_v,num_v*sizeof(int),cudaMemcpyHostToDevice);
-		cudaMemcpy(d_result,res,num_v*sizeof(int),cudaMemcpyHostToDevice);
+
 
 		actv<<<block,thread>>>(d_inf_v,d_trs_v,d_act_v,d_index,d_adjlist,d_result,num_v,1);
 
@@ -199,12 +205,10 @@ int main(int argc, char *argv[])
 				num_act_v++;
 			}
 		}
+
 	}
 	/*RESULT*/
-	printf("final_active_node %d\n",num_act_v );
-
-
-
+	printf("final_active_node %d\n",num_act_v);
 	cudaFree(d_inf_v); cudaFree(d_trs_v); cudaFree(d_act_v); cudaFree(d_index); cudaFree(d_adjlist);cudaFree(d_result);
 	igraph_destroy(&graph);
 	return 0;
