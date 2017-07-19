@@ -194,7 +194,7 @@ int main(int argc, char *argv[])
 		cudaMemcpy(d_act_v,act_v,num_v*sizeof(int),cudaMemcpyHostToDevice);
 
 
-		actv<<<block,thread>>>(d_inf_v,d_trs_v,d_act_v,d_index,d_adjlist,d_result,num_v,1);
+		active<<<block,thread>>>(d_inf_v,d_trs_v,d_act_v,d_index,d_adjlist,d_result,num_v,1);
 
 		cudaMemcpy(res,d_result,num_v*sizeof(int),cudaMemcpyDeviceToHost);
 
